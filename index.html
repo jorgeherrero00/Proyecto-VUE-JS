@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.8.1/css/all.css">
+
+  <title>Document</title>
+</head>
+
+<body>
+
+  <div id="app">  
+    <div id="menu-toggle" @click="toggleMenu">
+      <i class="fas fa-bars"></i>
+    </div>
+    
+    <div id="side-menu" :class="{ 'show-menu': showMenu }">
+      <ul>
+        <li class="uppercase" v-for="category in sortedCategories" :key="category" @click="fetchProducts(category)">
+          {{ category }}
+        </li>
+      </ul>
+    </div>
+    
+    <div v-if="loading">
+      <div class="custom-loader"></div>
+    </div>
+    <div v-else>
+      <div>
+        <h3>Carrito</h3>
+        <p v-if="carritoVacio">El carrito está vacío</p>
+        <div v-else>
+          <p v-for="(producto, index) in carrito" :key="index">
+            {{producto.title}} - {{producto.price}} - Cantidad: {{producto.quantity}}
+            <button @click="updateCartItemQuantity(index, producto.quantity - 1)">-</button>
+            <button @click="updateCartItemQuantity(index, producto.quantity + 1)">+</button>
+            <button @click="removeCartItem(index)">Eliminar</button>
+          </p>
+          <p>Total: {{ calculateTotal() }}€</p>
+        </div>
+      </div>
+      
+      <div class="inicio" v-if="!selectedProduct">
+        <h1>Lista de Categorías</h1>
+        <div>
+          <label>Ordenar por:</label>
+          <select v-model="orderBy" @change="sortCategories">
+            <option value="name">Nombre</option>
+            <option value="price">Precio</option>
+          </select>
+        </div>
+        <ul>
+          <li class="uppercase" v-for="category in sortedCategories" :key="category" @click="fetchProducts(category)">
+            {{ category }}
+          </li>
+        </ul>
+
+        <h2 v-if="products.length > 0">Productos de la categoría seleccionada</h2>
+        <ul>
+          <li v-for="product in products" :key="product.id" @click="showProductDetail(product)">
+            {{ product.title }} - {{ product.price }}
+            <img :src="product.image" alt="">
+          </li>
+        </ul>
+      </div>
+
+      <div v-if="selectedProduct">
+        <h2>Detalle del Producto</h2>
+        <p><strong>Nombre:</strong> {{ selectedProduct.title }}</p>
+        <p><strong>Precio:</strong> {{ selectedProduct.price }}</p>
+        <p><strong>Descripción:</strong> {{ selectedProduct.description }}</p>
+
+        <button @click="buyProduct(selectedProduct)">Comprar</button>
+        <button @click="closeProductDetail">Cerrar Detalle</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { createApp } = Vue;
+
+    createApp({
+      data() {
+        return {
+          loading: true,
+          categories: [],
+          products: [],
+          carrito: this.loadCarritoFromLocalStorage() || [],
+          selectedProduct: null,
+          orderBy: 'name',
+          carritoVacio: true,
+          showMenu: false,
+        };
+      },
+      computed: {
+        sortedCategories() {
+          return this.categories.slice().sort((a, b) => {
+            if (this.orderBy === 'name') {
+              return a.localeCompare(b);
+            } else if (this.orderBy === 'price') {
+              const avgPriceA = this.calculateAveragePrice(a);
+              const avgPriceB = this.calculateAveragePrice(b);
+              return avgPriceA - avgPriceB;
+            }
+            return 0;
+          });
+        },
+      },
+      methods: {
+        toggleMenu() {
+          this.showMenu = !this.showMenu;
+        },
+        fetchCategories() {
+          fetch('https://fakestoreapi.com/products/categories')
+            .then(response => response.json())
+            .then(data => {
+              this.categories = data;
+            })
+            .finally(() => {
+              this.loading = false;
+              this.checkCarritoVacio(); 
+            });
+        },
+        fetchProducts(category) {
+          this.loading = true;
+          fetch(`https://fakestoreapi.com/products/category/${category}`)
+            .then(response => response.json())
+            .then(data => {
+              this.products = data;
+              this.selectedProduct = null;
+            })
+            .finally(() => {
+              this.loading = false;
+            });
+        },
+        showProductDetail(product) {
+          this.selectedProduct = product;
+        },
+        closeProductDetail() {
+          this.selectedProduct = null;
+        },
+        buyProduct(product) {
+          this.carrito.push({
+            title: product.title,
+            price: product.price,
+            quantity: 1,
+          });
+          this.carritoVacio = false;
+          this.saveCarritoToLocalStorage();
+        },
+        updateCartItemQuantity(index, newQuantity) {
+          if (newQuantity >= 1) {
+            this.carrito[index].quantity = newQuantity;
+          }
+          this.checkCarritoVacio();
+          this.saveCarritoToLocalStorage();
+        },
+        removeCartItem(index) {
+          this.carrito.splice(index, 1);
+          this.checkCarritoVacio();
+          this.saveCarritoToLocalStorage();
+        },
+        calculateTotal() {
+          return this.carrito.reduce((total, producto) => total + producto.price * producto.quantity, 0);
+        },
+        sortCategories() {
+          this.showMenu = false;
+        },
+        checkCarritoVacio() {
+          this.carritoVacio = this.carrito.length === 0;
+        },
+        saveCarritoToLocalStorage() {
+          localStorage.setItem('carrito', JSON.stringify(this.carrito));
+        },
+        loadCarritoFromLocalStorage() {
+          const storedCarrito = localStorage.getItem('carrito');
+          return storedCarrito ? JSON.parse(storedCarrito) : [];
+        },
+      },
+      mounted() {
+        this.fetchCategories();
+      },
+    }).mount('#app');
+  </script>
+</body>
+
+</html>
